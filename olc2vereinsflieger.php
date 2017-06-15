@@ -7,6 +7,7 @@
 	//
 	// Versions
 	// 1.0 - 31.05.2017 First draft
+	// 1.1 - 15.06.2017 Add some fields, improve error handling
 	
 
 	// Enable error output
@@ -37,12 +38,18 @@
 		echo "Landing time: " . $landingtimeFromOLC->format('Y-m-d H:i:s') . "<br />";
 		echo "Pilot name: " . $pilotnameFromOLC . "<br />";
 		
-		$flightidVereinsflieger = findFlightID($starttimeFromOLC, $landingtimeFromOLC, $pilotnameFromOLC);
+		$flightidVereinsflieger = findFlightID($starttimeFromOLC, $pilotnameFromOLC);
 		
 		if ($flightidVereinsflieger > 0)
 		{
-			correctFlight($flightidVereinsflieger, $starttimeFromOLC, $landingtimeFromOLC);
-			sendNotification("Flight from " . $pilotnameFromOLC . " corrected." , $pushoverUserKey);	
+			$result = correctFlight($flightidVereinsflieger, $starttimeFromOLC, $landingtimeFromOLC);
+			if ($result > 0)
+			{
+				sendNotification("Flight of " . $pilotnameFromOLC . " corrected." , $pushoverUserKey);
+			} else
+			{
+				sendNotification("Error correcting flight. Error code " . $result, $pushoverUserKey);
+			}
 		} else
 		{
 			// no matching flight found, create new
@@ -57,7 +64,7 @@
 		echo "Called without parameters, no functionality.";
 	}
 
-	function findFlightID ($starttimeOLC, $landingtimeOLC, $pilotOLC)
+	function findFlightID ($starttimeOLC, $pilotOLC)
 	{
 		echo "findFlightID()<br />";
 		
@@ -84,7 +91,8 @@
 				echo "success getting flights<br />";
 				$aResponse = $a->GetResponse();
  				$no_Flights = count ($aResponse) - 1; // last element is httpresponse...
- 				if ($no_Flights > 0) {
+ 				if ($no_Flights > 0)
+ 				{
           for ($i=0; $i<$no_Flights;$i++)
           {
             $starttimeVereinsflieger = new DateTime($aResponse[$i]["departuretime"]);
@@ -123,7 +131,7 @@
 			{
 				// error when retrieving flights
 				echo "error when retrieving flights<br />";
-				return -2;
+				return -3;
 			}
 			
 			
@@ -131,7 +139,7 @@
 		{
 			// error in logging in to vereinsflieger
 			echo "error in logging in to vereinsflieger<br />";
-			return -3;
+			return -4;
 		}
 		
 	}
@@ -149,7 +157,7 @@
       'departuretime' => $starttime->format("Y-m-d H:i"));
 
     $a = new VereinsfliegerRestInterface();
-    $result = $a->SignIn($vereinsfliegerLogin,$vereinsfliegerPassword,0);
+    $result = $a->SignIn($vereinsfliegerLogin, $vereinsfliegerPassword, 0);
 		
 		if ($result)
 		{
