@@ -48,14 +48,14 @@
 				sendNotification("Flight of " . $pilotnameFromOLC . " corrected." , $pushoverUserKey);
 			} else
 			{
-				sendNotification("Error correcting flight. Error code " . $result, $pushoverUserKey);
+				sendNotification("Error correcting flight.", $pushoverUserKey);
 			}
 		} else
 		{
 			// no matching flight found, create new
 			// #TODO not yet implemented
 			//addFlight();
-			sendNotification("No matching flight found. Error " . $flightidVereinsflieger, $pushoverUserKey);
+			sendNotification("No matching flight found.", $pushoverUserKey);
 		}
 
 	} else
@@ -184,6 +184,8 @@
 	function sendNotification($message, $userkey)
 	{
 		global $pushoverApplicationKey;
+		
+		$message = "OLC2Vereinsflieger: " . $message;
 		
 		curl_setopt_array($ch = curl_init(), array(
   			CURLOPT_URL => "https://api.pushover.net/1/messages.json",
