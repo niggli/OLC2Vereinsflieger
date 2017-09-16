@@ -8,6 +8,7 @@
 	// Versions
 	// 1.0 - 31.05.2017 First draft
 	// 1.1 - 15.06.2017 Add some fields, improve error handling
+	// 2.0 - 15.09.2017 Implement adding of new flights, implement usage of date/callsign/airfield
 	
 
 	// Enable error output
@@ -15,12 +16,17 @@
 	ini_set('display_startup_errors', 1);
 	error_reporting(E_ALL);
 	
-	// global variables, to be replaced in future by config file
+	// global constants ##TODO config file
 	$vereinsfliegerLogin = "";
 	$vereinsfliegerPassword = "";
 	$pushoverApplicationKey = "";
 	$pushoverUserKey = "";
-
+	$newflightsStarttype = "F";
+	$newflightsFlighttypeID = "10"; // 10 means N, Privatflug
+	$newflightsChargemode = "2"; // 2 means P, Pilot
+	$newflightsTowplane = ""; // leave empty if no tow entry should be created
+	$correctionExcludeList = array("callsign1", "callsign2");
+	
   require_once('VereinsfliegerRestInterface.php');	
   date_default_timezone_set ( "UTC");
 
@@ -28,40 +34,54 @@
 	echo "<html><head></head><body><h1>OLCtoVereinsflieger</h1>";
 
 	// check passed variables
-	if (isset ($_GET['starttime']))
+	if (   (isset ($_GET['starttime']))
+		  && (isset ($_GET['landingtime']))
+		  && (isset ($_GET['pilotname'])) 
+			&& (isset ($_GET['airfield'])) 
+			&& (isset ($_GET['callsign'])) )
 	{
 		$starttimeFromOLC = new DateTime($_GET['starttime']);
 		$landingtimeFromOLC = new DateTime($_GET['landingtime']);
 		$pilotnameFromOLC = $_GET['pilotname'];
+		$airfieldFromOLC = $_GET['airfield'];
+		$callsignFromOLC = $_GET['callsign'];
 		
 		echo "Start time: " . $starttimeFromOLC->format('Y-m-d H:i:s') .  "<br />";
 		echo "Landing time: " . $landingtimeFromOLC->format('Y-m-d H:i:s') . "<br />";
 		echo "Pilot name: " . $pilotnameFromOLC . "<br />";
+		echo "Airfield: " . $airfieldFromOLC . "<br />";
+		echo "Callsign: " . $callsignFromOLC . "<br />";
 		
 		$flightidVereinsflieger = findFlightID($starttimeFromOLC, $pilotnameFromOLC);
 		
 		if ($flightidVereinsflieger > 0)
 		{
-			$result = correctFlight($flightidVereinsflieger, $starttimeFromOLC, $landingtimeFromOLC);
+			// matching flight found, correct times
+			$result = correctFlight($flightidVereinsflieger, $starttimeFromOLC, $landingtimeFromOLC, $callsignFromOLC);
 			if ($result > 0)
 			{
 				sendNotification("Flight of " . $pilotnameFromOLC . " corrected." , $pushoverUserKey);
 			} else
 			{
-				sendNotification("Error correcting flight.", $pushoverUserKey);
+				sendNotification("Error correcting flight. Errorcode " . $result, $pushoverUserKey);
 			}
 		} else
 		{
 			// no matching flight found, create new
-			// #TODO not yet implemented
-			//addFlight();
-			sendNotification("No matching flight found.", $pushoverUserKey);
+			$result = addFlight($starttimeFromOLC, $landingtimeFromOLC, $pilotnameFromOLC, $airfieldFromOLC, $callsignFromOLC);
+			if ($result > 0)
+			{
+				sendNotification("Flight of " . $pilotnameFromOLC . " imported from OLC." , $pushoverUserKey);
+			} else
+			{
+				sendNotification("Error adding flight. Errorcode " . $result, $pushoverUserKey);
+			}
 		}
 
 	} else
 	{
 		// nothing set, startpage
-		echo "Called without parameters, no functionality.";
+		echo "Called with not all parameters, no functionality.";
 	}
 
 	function findFlightID ($starttimeOLC, $pilotOLC)
@@ -76,16 +96,13 @@
 		$result = $a->SignIn($vereinsfliegerLogin, $vereinsfliegerPassword, 0);
 		
 		if ($result)
-		{
-			//load all flights from today
-			// ##TODO other dates
-			
+		{			
 			echo "success login<br />";
-			
-			// TEST for specific date
-      //$return = $a->GetFlights_date ("2017-04-30");
-			
-			$return = $a->GetFlights_today();
+	
+			// Get all flights from date of flight
+			$datum = date_format($starttimeOLC, "Y-m-d");
+			$return = $a->GetFlights_date ($datum);
+
 			if ($return)
 			{
 				echo "success getting flights<br />";
@@ -107,7 +124,7 @@
 						if($pilotOLC == $pilotVereinsflieger)
 						{
 							echo "pilot found<br />";
-							if (abs($starttimeOLC->getTimestamp() - $starttimeVereinsflieger->getTimestamp()) < 900) // 15 Minuten
+							if (abs($starttimeOLC->getTimestamp() - $starttimeVereinsflieger->getTimestamp()) < 900) // 15 minutes tolerance
 							{
 								echo "flight found<br />";
 								return $aResponse[$i]["flid"];
@@ -145,16 +162,83 @@
 	}
 
 
-	function correctFlight ($flightid, $starttime, $landingtime)
+	function correctFlight ($flightid, $starttime, $landingtime, $callsign)
 	{
 		global $vereinsfliegerLogin;
     global $vereinsfliegerPassword;
+		global $correctionExcludeList;
 		
 		echo "correctFlight()<br />";
 		
-    $Flight = array(
+		// Check if plane is in exclude list because it's logger doesn't produce exact start/landing times
+		if ( in_array($callsign, $correctionExcludeList) )
+		{
+			echo "Don't correct flight, plane is in exclude list<br />";
+			return -3;
+		} else
+		{
+			$Flight = array(
+      	'arrivaltime' => $landingtime->format("Y-m-d H:i"),
+      	'departuretime' => $starttime->format("Y-m-d H:i"));
+
+    	$a = new VereinsfliegerRestInterface();
+    	$result = $a->SignIn($vereinsfliegerLogin, $vereinsfliegerPassword, 0);
+		
+			if ($result)
+			{
+				echo "success login<br />";
+	      $result = $a->UpdateFlight($flightid, $Flight);
+		      
+	      if ($result)
+	      {
+	        echo "success adapting flight<br />";
+					return $flightid;
+		    } else
+		    {
+	        echo "error: adapting flight<br />";
+	        return -1;
+	      }
+			} else
+			{
+	      echo "error: login<br />";
+				return -2;
+			}
+		}
+		
+    
+	}
+	
+	function addFlight ($starttime, $landingtime, $pilotname, $airfield, $callsign)
+	{
+		global $vereinsfliegerLogin;
+    global $vereinsfliegerPassword;
+		global $newflightsStarttype;
+		global $newflightsFlighttypeID;
+		global $newflightsChargemode;
+		global $newflightsTowplane;
+		
+		echo "addFlight()<br />";	
+		
+		// Pilot name in vereinsflieger must be "Nachname, Vorname", but in OLC it's "Vorname Nachname" (country code is already removed in OLCnotifier)
+		$vorname = substr($pilotname, 0, strrpos($pilotname, ' '));
+		$nachname = substr($pilotname, strrpos($pilotname, ' '), strlen($pilotname) - 1);
+		$pilotname = $vorname . ", " . $nachname;
+						
+		echo "pilotname converted to Vereinsflieger Format: $pilotname<br />";		
+		
+		$Flight = array(
+		  'callsign' => $callsign,
+		  'pilotname' => $pilotname,
+		  'starttype' => $newflightsStarttype,
+		  'departurelocation' => $airfield,
+		  'arrivallocation' => $airfield,
+		  'ftid' => $newflightsFlighttypeID,
+			'chargemode' => $newflightsChargemode,
+			'towcallsign' => $newflightsTowplane,
+			'comment' => "Flug aus OLC importiert, bitte Flugart prüfen",
       'arrivaltime' => $landingtime->format("Y-m-d H:i"),
       'departuretime' => $starttime->format("Y-m-d H:i"));
+      
 
     $a = new VereinsfliegerRestInterface();
     $result = $a->SignIn($vereinsfliegerLogin, $vereinsfliegerPassword, 0);
@@ -162,32 +246,35 @@
 		if ($result)
 		{
 			echo "success login<br />";
-      $result = $a->UpdateFlight($flightid, $Flight);
+      $result = $a->InsertFlight($Flight);
 	      
       if ($result)
       {
-        echo "success adapting flight<br />";
-				return $flightid;
+        echo "success adding flight<br />";
+				return 1;
 	    } else
 	    {
-        echo "error: adapting flight<br />";
+        echo "error: adding flight<br />";
         return -1;
       }
-		  } else
-		  {
-        echo "error: login<br />";
-			  return -2;
-		  }
+		} else
+		{
+      echo "error: login<br />";
+			return -2;
 		}
+	}
 	
 
 	function sendNotification($message, $userkey)
 	{
 		global $pushoverApplicationKey;
 		
-		$message = "OLC2Vereinsflieger: " . $message;
+		if (  ($userkey != "")
+			 && ($pushoverApplicationKey != "") )
+		{
+			$message = "OLC2Vereinsflieger: " . $message;
 		
-		curl_setopt_array($ch = curl_init(), array(
+			curl_setopt_array($ch = curl_init(), array(
   			CURLOPT_URL => "https://api.pushover.net/1/messages.json",
   			CURLOPT_POSTFIELDS => array(
     		"token" => $pushoverApplicationKey,
@@ -195,10 +282,14 @@
     		"message" => $message,
   			),
   			CURLOPT_SAFE_UPLOAD => true,
-		));
-		curl_exec($ch);
-		curl_close($ch);
-
+				));
+			curl_exec($ch);
+			curl_close($ch);
+		} else
+		{
+			echo "No notification sent<br />";
+		}
+		
 	}
 
 
