@@ -211,7 +211,7 @@
 	function addFlight ($starttime, $landingtime, $pilotname, $airfield, $callsign)
 	{
 		global $vereinsfliegerLogin;
-    global $vereinsfliegerPassword;
+		global $vereinsfliegerPassword;
 		global $newflightsStarttype;
 		global $newflightsFlighttypeID;
 		global $newflightsChargemode;
@@ -222,8 +222,8 @@
 		// Pilot name in vereinsflieger must be "Nachname, Vorname", but in OLC it's "Vorname Nachname" (country code is already removed in OLCnotifier)
 		$vorname = substr($pilotname, 0, strrpos($pilotname, ' '));
 		$nachname = substr($pilotname, strrpos($pilotname, ' '), strlen($pilotname) - 1);
-		$pilotname = $vorname . ", " . $nachname;
-						
+		$pilotname = $nachname . ", " . $vorname;
+		
 		echo "pilotname converted to Vereinsflieger Format: $pilotname<br />";		
 		
 		$Flight = array(
@@ -233,11 +233,11 @@
 		  'departurelocation' => $airfield,
 		  'arrivallocation' => $airfield,
 		  'ftid' => $newflightsFlighttypeID,
-			'chargemode' => $newflightsChargemode,
-			'towcallsign' => $newflightsTowplane,
-			'comment' => "Flug aus OLC importiert, bitte Flugart prüfen",
-      'arrivaltime' => $landingtime->format("Y-m-d H:i"),
-      'departuretime' => $starttime->format("Y-m-d H:i"));
+		  'chargemode' => $newflightsChargemode,
+		  'towcallsign' => $newflightsTowplane,
+		  'comment' => "Flug wurde aus OLC importiert, bitte alle Angaben prüfen",
+		  'arrivaltime' => $landingtime->format("Y-m-d H:i"),
+		  'departuretime' => $starttime->format("Y-m-d H:i"));
       
 
     $a = new VereinsfliegerRestInterface();
