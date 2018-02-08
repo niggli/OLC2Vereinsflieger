@@ -12,28 +12,56 @@
   // 1.1 - 15.06.2017 Add some fields, improve error handling
   // 2.0 - 15.09.2017 Implement adding of new flights, implement usage of date/callsign/airfield
   // 2.1 - 19.01.2018 Implement timezone support
-  
+  // 2.2 - 08.02.2018 Implement pilot list filter
 
+
+  // Prepare array for pilot list
+  $pilotentry = array (
+    "name" => "",
+    "flighttype" => "",
+    "starttype" => "",
+    "chargemode" => "",
+    "towplane" => "",
+    "glider" => "",
+    "pushoveruserkey" => ""
+  );
+  $pilots = array();
+  
+  // read configuration
+  $configuration = parse_ini_file ("olc2vereinsflieger.cfg.php", 1);
+  $vereinsfliegerLogin = $configuration["vereinsflieger"]["login_name"];
+  $vereinsfliegerPassword = $configuration["vereinsflieger"]["password"];
+  $flightTimezone = $configuration["general"]["timezone"];
+  $pushoverApplicationKey = $configuration["pushover"]["applicationkey"];
+  $pushoverAdminUserKey = $configuration["pushover"]["adminuserkey"];
+  $correctionExcludeList = explode (",",$configuration["general"]["correctionExcludeList"]);
+  $pilotNames = explode (",",$configuration["pilots"]["names"]);
+  $pilotFlighttypes = explode (",",$configuration["pilots"]["flighttypes"]);
+  $pilotStarttypes = explode (",",$configuration["pilots"]["starttypes"]);
+  $pilotChargemodes = explode (",",$configuration["pilots"]["chargemodes"]);
+  $pilotTowplanes = explode (",",$configuration["pilots"]["towplanes"]);
+  $pilotGliders = explode (",",$configuration["pilots"]["gliders"]);
+  $pilotPushoverkeys = explode (",",$configuration["pilots"]["pushoveruserkeys"]);
+
+  for ($i = 0; $i < count($pilotNames); $i++)
+  {
+    $pilots[$i] = $pilotentry;
+    $pilots[$i]["name"] = $pilotNames[$i];
+    $pilots[$i]["flighttype"] = $pilotFlighttypes[$i];
+    $pilots[$i]["starttype"] = $pilotStarttypes[$i];
+    $pilots[$i]["chargemode"] = $pilotChargemodes[$i];
+    $pilots[$i]["towplane"] = $pilotTowplanes[$i];
+    $pilots[$i]["glider"] = $pilotGliders[$i];
+    $pilots[$i]["pushoveruserkey"] = $pilotPushoverkeys[$i];
+  }
+  
   // Enable error output
   ini_set('display_errors', 1);
   ini_set('display_startup_errors', 1);
   error_reporting(E_ALL);
   
-  // global constants ##TODO config file
-  $vereinsfliegerLogin = "";
-  $vereinsfliegerPassword = "";
-  $pushoverApplicationKey = "";
-  $pushoverUserKey = "";
-  $newflightsStarttype = "F";
-  $newflightsFlighttypeID = "10"; // 10 means N, Privatflug
-  $newflightsChargemode = "2"; // 2 means P, Pilot
-  $newflightsTowplane = ""; // leave empty if no tow entry should be created
-  $flightTimezone = "Europe/Zurich";
-  // Some loggers generate unprecise times. These are only used to generate new entrys, not for correction of existing ones.
-  $correctionExcludeList = array("HB-1234", "HB-5678", "HB-1111");
-  
   require_once('VereinsfliegerRestInterface.php');  
-  date_default_timezone_set ( "UTC");
+  date_default_timezone_set("UTC");
 
   // echo header
   echo "<html><head></head><body><h1>OLCtoVereinsflieger</h1>";
@@ -57,44 +85,65 @@
     echo "Airfield: " . $airfieldFromOLC . "<br />";
     echo "Callsign: " . $callsignFromOLC . "<br />";
     
-    $flightidVereinsflieger = findFlightID($starttimeFromOLC, $pilotnameFromOLC);
-    
-    if ($flightidVereinsflieger > 0)
+    // check if pilot name is configured in list
+    $pilotindex = findPilot($pilotnameFromOLC);
+
+    if ($pilotindex >= 0)
     {
-      // matching flight found, correct times
-      $result = correctFlight($flightidVereinsflieger, $starttimeFromOLC, $landingtimeFromOLC, $callsignFromOLC);
-      if ($result > 0)
+      
+      $flightidVereinsflieger = findFlightID($starttimeFromOLC, $pilots[$pilotindex]["name"]);
+      
+      if ($flightidVereinsflieger > 0)
       {
-        sendNotification("Flight of " . $pilotnameFromOLC . " corrected." , $pushoverUserKey);
+        // matching flight found, correct times
+        $result = correctFlight($flightidVereinsflieger, $starttimeFromOLC, $landingtimeFromOLC, $callsignFromOLC);
+        if (is_numeric($result))
+        {
+          sendNotification("Flug mit Daten aus OLC korrigiert. Start: " . $starttimeFromOLC->format('Y-m-d H:i:s') . " Landung: " . $landingtimeFromOLC->format('Y-m-d H:i:s'), $pilots[$pilotindex]["pushoveruserkey"]);
+          if ($pilots[$pilotindex]["pushoveruserkey"] != $pushoverAdminUserKey)
+          {
+            sendNotification("Flug von " . $pilotnameFromOLC . " korrigiert." , $pushoverAdminUserKey);
+          }
+        } else
+        {
+          sendNotification("Fehler beim Korrigieren: " . $result, $pushoverAdminUserKey);
+        }
       } else
       {
-        sendNotification("Error correcting flight. Errorcode " . $result, $pushoverUserKey);
+        // no matching flight found, create new
+        $result = addFlight($starttimeFromOLC, $landingtimeFromOLC, $airfieldFromOLC, $callsignFromOLC, $pilots[$pilotindex]);
+        if (is_numeric($result))
+        {
+          sendNotification("Flug aus OLC importiert. Start: " . $starttimeFromOLC->format('Y-m-d H:i:s') . " Landung: " . $landingtimeFromOLC->format('Y-m-d H:i:s'), $pilots[$pilotindex]["pushoveruserkey"]);
+          if ($pilots[$pilotindex]["pushoveruserkey"] != $pushoverAdminUserKey)
+          {
+            sendNotification("Flug von " . $pilotnameFromOLC . " importiert." , $pushoverAdminUserKey);
+          }
+        } else
+        {
+          sendNotification("Fehler beim Erzeugen: " . $result, $pushoverAdminUserKey);
+        }
       }
     } else
     {
-      // no matching flight found, create new
-      $result = addFlight($starttimeFromOLC, $landingtimeFromOLC, $pilotnameFromOLC, $airfieldFromOLC, $callsignFromOLC);
-      if ($result > 0)
-      {
-        sendNotification("Flight of " . $pilotnameFromOLC . " imported from OLC." , $pushoverUserKey);
-      } else
-      {
-        sendNotification("Error adding flight. Errorcode " . $result, $pushoverUserKey);
-      }
-    }
+      echo "Pilotfilter active, pilot not in list <br />"; 
+    }/* if pilot in list */
 
   } else
   {
     echo "Called with not all parameters, no functionality.";
   }
+  
+  // echo end of HTML
+  echo "</body></html>";
 
   function findFlightID ($starttimeOLC, $pilotOLC)
-  {
-    echo "findFlightID()<br />";
-    
+  {    
     global $vereinsfliegerLogin;
     global $vereinsfliegerPassword;
     global $flightTimezone;
+    
+    echo "findFlightID()<br />";
     
     // login to Vereinsflieger
     $a = new VereinsfliegerRestInterface();
@@ -181,7 +230,7 @@
     if ( in_array($callsign, $correctionExcludeList) )
     {
       echo "Don't correct flight, plane is in exclude list<br />";
-      return -3;
+      return "Plane is in exlude list.";
     } else
     {
       $Flight = array(
@@ -203,47 +252,46 @@
         } else
         {
           echo "error: adapting flight<br />";
-          return -1;
+          return "Error adapting flight in vereinsflieger.";
         }
       } else
       {
         echo "error: login<br />";
-        return -2;
+        return "Error logging into vereinsflieger.";
       }
-    }
-    
-    
+    }    
   }
   
-  function addFlight ($starttime, $landingtime, $pilotname, $airfield, $callsign)
-  {
+  function addFlight ($starttime, $landingtime, $airfield, $callsign, $pilot)
+  { 
     global $vereinsfliegerLogin;
     global $vereinsfliegerPassword;
-    global $newflightsStarttype;
-    global $newflightsFlighttypeID;
-    global $newflightsChargemode;
-    global $newflightsTowplane;
     global $flightTimezone;
     
     echo "addFlight()<br />";  
     
     // Pilot name in vereinsflieger must be "Nachname, Vorname", but in OLC it's "Vorname Nachname" (country code is already removed in OLCnotifier)
-    $vorname = substr($pilotname, 0, strrpos($pilotname, ' '));
-    $nachname = substr($pilotname, strrpos($pilotname, ' '), strlen($pilotname) - 1);
+    $vorname = substr($pilot["name"], 0, strrpos($pilot["name"], ' '));
+    $nachname = substr($pilot["name"], strrpos($pilot["name"], ' '), strlen($pilot["name"]) - 1);
     $pilotname = $nachname . ", " . $vorname;
     
-    echo "pilotname converted to Vereinsflieger Format: $pilotname<br />";    
+    echo "pilotname converted to Vereinsflieger Format: $pilotname<br />";  
+    
+    if ($callsign == "")
+    {
+      $callsign = $pilot["glider"];
+    }
     
     $Flight = array(
       'callsign' => $callsign,
       'pilotname' => $pilotname,
-      'starttype' => $newflightsStarttype,
+      'starttype' => $pilot["starttype"],
       'departurelocation' => $airfield,
       'arrivallocation' => $airfield,
-      'ftid' => $newflightsFlighttypeID,
-      'chargemode' => $newflightsChargemode,
-      'towcallsign' => $newflightsTowplane,
-      'comment' => "Flug wurde automatisch aus OLC importiert, bitte alle Angaben prüfen",
+      'ftid' => $pilot["flighttype"],
+      'chargemode' => $pilot["chargemode"],
+      'towcallsign' => $pilot["towplane"],
+      'comment' => "Flug aus OLC importiert",
       'arrivaltime' => datetime_to_local($landingtime, $flightTimezone)->format("Y-m-d H:i"),
       'departuretime' => datetime_to_local($starttime, $flightTimezone)->format("Y-m-d H:i"));
       
@@ -263,12 +311,12 @@
       } else
       {
         echo "error: adding flight<br />";
-        return -1;
+        return "Error adding flight in vereinsflieger.";
       }
     } else
     {
       echo "error: login<br />";
-      return -2;
+      return "Error logging into vereinsflieger.";
     }
   }
   
@@ -334,6 +382,20 @@
       return -1;
     }
   }
-
+  
+  function findPilot($pilotnameFromOLC)
+  {
+    global $pilots;
+    
+    for ($j = 0; $j < count($pilots); $j++)
+    {
+      if ($pilots[$j]["name"] == $pilotnameFromOLC)
+      {
+        return $j;        
+      }
+    }
+    
+    return -1;
+  }
 
 ?>
