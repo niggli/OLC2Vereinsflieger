@@ -13,6 +13,7 @@
   // 2.0 - 15.09.2017 Implement adding of new flights, implement usage of date/callsign/airfield
   // 2.1 - 19.01.2018 Implement timezone support
   // 2.2 - 08.02.2018 Implement pilot list filter
+  // 2.3 - 15.04.2018 Inform admin when called with not all parameters
 
 
   // Prepare array for pilot list
@@ -131,7 +132,7 @@
 
   } else
   {
-    echo "Called with not all parameters, no functionality.";
+    sendNotification("Called with not all parameters, no functionality.", $pushoverAdminUserKey);
   }
   
   // echo end of HTML
