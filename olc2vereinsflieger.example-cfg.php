@@ -16,9 +16,8 @@ password = "12345678"
 [general]
 timezone = "Europe/Zurich"
 correctionExcludeList = "HB-1234,HB-5678"
-pilotfilter = "true"
 
-; Section for general pushover settings. If pilotfilter is active, see also pilot configuration
+; Section for general pushover settings. See also pilot configuration
 ; 
 [pushover]
 applicationkey = "sdmsdasdasdasd"
@@ -26,8 +25,7 @@ adminuserkey = "asdasasdasd"
 
 ;
 ;
-; List of pilots, used only if pilotfilter is true. Enter the needed data in
-; the arrays with the same order.
+; List of pilots. Enter the needed data in the arrays with the same order.
 ; - names: The name as it appears in OLC, without country code, Prename first e.g. "John Doe".
 ; - flighttypes: default flighttype ID to be used in vereinsflieger. 10 means N, "Privatflug".
 ; - starttypes: starttype to be used in vereinsflieger. "F" means glider tow, "E" means selflaunch.

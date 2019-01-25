@@ -14,6 +14,7 @@
   // 2.1 - 19.01.2018 Implement timezone support
   // 2.2 - 08.02.2018 Implement pilot list filter
   // 2.3 - 15.04.2018 Inform admin when called with not all parameters
+  // 2.4 - 25.01.2019 Possibility to run locally via CLI
 
 
   // Prepare array for pilot list
@@ -66,20 +67,35 @@
 
   // echo header
   echo "<html><head></head><body><h1>OLCtoVereinsflieger</h1>";
-
-  // check passed variables
-  if (   (isset ($_GET['starttime']))
-      && (isset ($_GET['landingtime']))
-      && (isset ($_GET['pilotname'])) 
-      && (isset ($_GET['airfield'])) 
-      && (isset ($_GET['callsign'])) )
+  
+  // Get arguments from commandline if called locally (for development)
+  if ('cli' === PHP_SAPI) {
+    
+    $starttimeFromOLC =new DateTime($argv[1]);
+    $landingtimeFromOLC = new DateTime($argv[2]);
+    $pilotnameFromOLC = $argv[3];
+    $airfieldFromOLC = $argv[4];
+    $callsignFromOLC = $argv[5];
+    
+  } else
   {
+    
     $starttimeFromOLC = new DateTime($_GET['starttime']);
     $landingtimeFromOLC = new DateTime($_GET['landingtime']);
     $pilotnameFromOLC = $_GET['pilotname'];
     $airfieldFromOLC = $_GET['airfield'];
     $callsignFromOLC = $_GET['callsign'];
     
+  }
+
+  // check passed variables
+  if ( (isset ($starttimeFromOLC))
+    && (isset ($landingtimeFromOLC))
+    && (isset ($pilotnameFromOLC)) 
+    && (isset ($airfieldFromOLC)) 
+    && (isset ($callsignFromOLC)) )
+  {
+   
     echo "Start time(UTC): " . $starttimeFromOLC->format('Y-m-d H:i:s') .  "<br />";
     echo "Landing time(UTC): " . $landingtimeFromOLC->format('Y-m-d H:i:s') . "<br />";
     echo "Pilot name: " . $pilotnameFromOLC . "<br />";
