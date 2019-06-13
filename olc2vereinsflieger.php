@@ -15,6 +15,7 @@
   // 2.2 - 08.02.2018 Implement pilot list filter
   // 2.3 - 15.04.2018 Inform admin when called with not all parameters
   // 2.4 - 25.01.2019 Possibility to run locally via CLI
+  // 2.5 - 11.06.2019 Add Appkey for vereinsflieger login
 
 
   // Prepare array for pilot list
@@ -33,6 +34,8 @@
   $configuration = parse_ini_file ("olc2vereinsflieger.cfg.php", 1);
   $vereinsfliegerLogin = $configuration["vereinsflieger"]["login_name"];
   $vereinsfliegerPassword = $configuration["vereinsflieger"]["password"];
+  $vereinsfliegerClub = $configuration["vereinsflieger"]["cid"];
+  $vereinsfliegerAppkey = $configuration["vereinsflieger"]["appkey"];
   $flightTimezone = $configuration["general"]["timezone"];
   $pushoverApplicationKey = $configuration["pushover"]["applicationkey"];
   $pushoverAdminUserKey = $configuration["pushover"]["adminuserkey"];
@@ -158,13 +161,15 @@
   {    
     global $vereinsfliegerLogin;
     global $vereinsfliegerPassword;
+    global $vereinsfliegerClub;
+    global $vereinsfliegerAppkey;
     global $flightTimezone;
     
     echo "findFlightID()<br />";
     
     // login to Vereinsflieger
     $a = new VereinsfliegerRestInterface();
-    $success = $a->SignIn($vereinsfliegerLogin, $vereinsfliegerPassword, 0);
+    $success = $a->SignIn($vereinsfliegerLogin, $vereinsfliegerPassword, $vereinsfliegerClub, $vereinsfliegerAppkey);
     
     if ($success)
     {      
@@ -238,6 +243,8 @@
   {
     global $vereinsfliegerLogin;
     global $vereinsfliegerPassword;
+    global $vereinsfliegerClub;
+    global $vereinsfliegerAppkey;
     global $correctionExcludeList;
     global $flightTimezone;
     
@@ -255,7 +262,7 @@
         'departuretime' => datetime_to_local($starttime, $flightTimezone)->format("Y-m-d H:i"));
       
       $a = new VereinsfliegerRestInterface();
-      $success = $a->SignIn($vereinsfliegerLogin, $vereinsfliegerPassword, 0);
+      $success = $a->SignIn($vereinsfliegerLogin, $vereinsfliegerPassword, $vereinsfliegerClub, $vereinsfliegerAppkey);
     
       if ($success)
       {
@@ -283,6 +290,8 @@
   { 
     global $vereinsfliegerLogin;
     global $vereinsfliegerPassword;
+    global $vereinsfliegerClub;
+    global $vereinsfliegerAppkey;
     global $flightTimezone;
     
     echo "addFlight()<br />";  
@@ -314,7 +323,7 @@
       
 
     $a = new VereinsfliegerRestInterface();
-    $success = $a->SignIn($vereinsfliegerLogin, $vereinsfliegerPassword, 0);
+    $success = $a->SignIn($vereinsfliegerLogin, $vereinsfliegerPassword, $vereinsfliegerClub, $vereinsfliegerAppkey);
     
     if ($success)
     {

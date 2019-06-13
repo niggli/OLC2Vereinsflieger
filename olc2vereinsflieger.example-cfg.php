@@ -8,6 +8,8 @@
 [vereinsflieger]
 login_name = "abc@web.de"
 password = "12345678"
+appkey = "32894723847234897234be272"
+
 
 ; General settings valid for all flights
 ; - correctionExcludeList: Some loggers generate unprecise times. These are only used to generate new entrys, not for correction of existing ones.
