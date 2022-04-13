@@ -183,7 +183,7 @@
       {
         echo "success getting flights<br />";
         $aResponse = $a->GetResponse();
-        $no_Flights = count ($aResponse) - 1; // last element is httpresponse...
+        $no_Flights = count ($aResponse) - 2; // last element is "sql", second last is httpresponse...
         if ($no_Flights > 0)
         {
           for ($i=0; $i<$no_Flights;$i++)
